@@ -104,6 +104,26 @@
         </div>
       </div>
 
+      <div class="live-bar">
+        <button class="btn live-btn" id="live" type="button" aria-pressed="false">Follow live</button>
+      </div>
+
+      <div class="live-card" id="live-card" hidden aria-live="off">
+        <div class="lv-elapsed"><span class="lbl" id="lv-el-l">Elapsed</span><b id="lv-el">0:00:00</b></div>
+        <div class="lv-cols">
+          <div class="lv-col" id="lv1">
+            <span class="lbl" id="lv1-l">Position</span>
+            <b class="lv-pos" id="lv1-pos">—</b>
+            <span class="lv-next" id="lv1-next"></span>
+          </div>
+          <div class="lv-col slow" id="lv2" hidden>
+            <span class="lbl" id="lv2-l">Slow</span>
+            <b class="lv-pos" id="lv2-pos">—</b>
+            <span class="lv-next" id="lv2-next"></span>
+          </div>
+        </div>
+      </div>
+
       <div class="strip-card" aria-hidden="true"><div class="strip" id="strip"></div></div>
 
       <div class="sheet" id="sheet" role="group" aria-label="Checkpoint schedule">

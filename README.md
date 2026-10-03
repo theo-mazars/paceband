@@ -13,6 +13,7 @@ Fonts are self-hosted, so the page makes no third-party requests.
   a checkpoint every 5 km.
 - "Add a slower pace" shows two columns of race time and time of day, one per pace.
 - Mobile first: one column on phones, large touch targets, and the share and copy buttons pinned to the bottom of the screen. Two columns from 54rem up.
+- "Follow live" uses the device clock and your start time to place a cursor on the route strip (one per pace) and grey out the checkpoints already passed. It is not stored in share links.
 - Checkpoints can be rebuilt from a spacing, then renamed, moved, removed or added one by one.
 - "Copy share link" copies a URL that restores the whole sheet. "Copy as text" copies a plain-text table.
 

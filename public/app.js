@@ -36,7 +36,8 @@
     start: '09:00',
     totalKm: 21.0975,
     intervalKm: 5,
-    cps: null
+    cps: null,
+    live: false // follow the clock of the day; never stored in the URL
   };
 
   const $ = (id) => document.getElementById(id);
@@ -276,6 +277,7 @@
     }
     summary();
     strip();
+    live();
     syncUrl();
   }
 
@@ -306,6 +308,7 @@
       const s = document.createElement('span');
       s.className = cls;
       s.style.left = x + '%';
+      s.dataset.x = x;
       if (text != null) s.textContent = text;
       el.appendChild(s);
     };
@@ -323,6 +326,86 @@
     add('tick end', 100);
     add('tl', 100, fmtNum(S.totalKm / f(), 2) + ' ' + U());
   }
+
+  /* ---------- Live ---------- */
+
+  // Seconds since the gun, by the device clock. A start more than 12 h ago is read as yesterday's.
+  function elapsedNow() {
+    const ss = startSec();
+    if (ss == null) return null;
+    const d = new Date();
+    let e = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds() - ss;
+    if (e < -12 * 3600) e += 86400;
+    return e;
+  }
+
+  function live() {
+    const rows = $('rows').children, el = $('strip'), card = $('live-card');
+    for (let i = 0; i < rows.length; i++) rows[i].classList.remove('passed', 'passed-fast');
+    el.querySelectorAll('.cursor').forEach((n) => n.remove());
+    el.querySelectorAll('.tick.done').forEach((n) => n.classList.remove('done'));
+    const e = S.live ? elapsedNow() : null;
+    card.hidden = e == null;
+    if (e == null) return;
+    const paces = [{ sec: S.paceSec, ok: S.paceOk, cls: 'cursor' }];
+    if (S.range) paces.push({ sec: S.paceSec2, ok: S.paceOk2, cls: 'cursor slow' });
+    const ready = paces.filter((p) => p.ok);
+    if (!ready.length) return;
+
+    paces.forEach((p) => {
+      if (!p.ok) return;
+      const x = Math.min(1, Math.max(0, e / (S.totalKm * p.sec))) * 100;
+      const c = document.createElement('span');
+      c.className = p.cls;
+      c.style.left = x + '%';
+      el.appendChild(c);
+    });
+    const slowest = ready[ready.length - 1];
+    const passedAt = (km, p) => e >= 0 && e >= Math.round(km * p.sec);
+    const mark = (row, km) => {
+      const n = ready.filter((p) => passedAt(km, p)).length;
+      if (n === ready.length) row.classList.add('passed');
+      else if (n > 0) row.classList.add('passed-fast');
+    };
+    for (let i = 0; i < rows.length; i++) {
+      const id = rows[i].dataset.id;
+      if (id === 'start') mark(rows[i], 0);
+      else if (id === 'fin') mark(rows[i], S.totalKm);
+      else {
+        const c = S.cps.find((x) => String(x.id) === id);
+        if (c && c.km < S.totalKm - 1e-9) mark(rows[i], c.km);
+      }
+    }
+    el.querySelectorAll('.tick').forEach((t) => { if (e >= 0 && e >= Math.round(S.totalKm * (+t.dataset.x / 100) * slowest.sec)) t.classList.add('done'); });
+
+    // Card: elapsed clock on top, then one column per pace with its position and next checkpoint.
+    const finishSec = Math.round(S.totalKm * slowest.sec);
+    $('lv-el-l').textContent = e < 0 ? 'Starts in' : e >= finishSec ? 'Finished' : 'Elapsed';
+    $('lv-el').textContent = hms(Math.abs(e));
+    const stops = domOrder().ord.map((c) => c.km).concat([S.totalKm]);
+    const col = (id, name, p) => {
+      const root = $(id);
+      root.hidden = !p || !p.ok;
+      if (root.hidden) return;
+      const km = Math.min(S.totalKm, Math.max(0, e / p.sec));
+      const nx = stops.find((s) => s > km + 1e-9);
+      $(id + '-l').textContent = name + ' · ' + fmtPace(p.sec * f()) + ' /' + U();
+      $(id + '-pos').textContent = fmtNum(km / f(), 2) + ' ' + U();
+      $(id + '-next').innerHTML = nx == null ? 'Finished' :
+        'Next <b>' + (nx === S.totalKm ? 'finish ' : '') + fmtNum(nx / f(), 2) + ' ' + U() + '</b> in <b>' + hms(Math.max(0, Math.round(nx * p.sec) - Math.max(0, e))) + '</b>';
+    };
+    col('lv1', S.range ? 'Fast' : 'Pace', paces[0]);
+    col('lv2', 'Slow', S.range ? paces[1] : null);
+  }
+  let liveTimer = 0;
+  $('live').addEventListener('click', function () {
+    S.live = !S.live;
+    this.setAttribute('aria-pressed', String(S.live));
+    clearInterval(liveTimer);
+    if (S.live) liveTimer = setInterval(live, 1000);
+    live();
+  });
+  document.addEventListener('visibilitychange', () => { if (S.live) live(); });
 
   // Stacked cards when the results column is too narrow for the table.
   function layout() {
