@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Expected passage times at every checkpoint of a race, from a steady pace or a fast and slow pace side by side.">
+  <title>PaceBand</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+<main class="wrap">
+  <header class="top">
+    <h1>PaceBand</h1>
+    <p>Expected passage times at every checkpoint, from a steady pace.</p>
+  </header>
+
+  <noscript><p class="note">This page needs JavaScript to calculate the times.</p></noscript>
+
+  <div class="grid">
+    <section class="panel" aria-label="Race settings">
+      <div class="field">
+        <span class="lbl">Race</span>
+        <div class="chips" id="presets"></div>
+        <div class="with-unit">
+          <label class="sr" for="dist">Total distance</label>
+          <input id="dist" type="text" inputmode="decimal" autocomplete="off">
+          <span class="u unit-lbl"></span>
+        </div>
+        <p class="err" id="dist-err" role="alert"></p>
+      </div>
+
+      <div class="field">
+        <span class="lbl">Units</span>
+        <div class="seg" id="units">
+          <button type="button" data-unit="km" aria-pressed="true">Kilometres</button>
+          <button type="button" data-unit="mi" aria-pressed="false">Miles</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="lbl" for="pace"><span id="pace-lbl">Pace</span> (min:sec per <span class="unit-lbl"></span>)</label>
+        <input id="pace" class="big" type="text" inputmode="numeric" autocomplete="off" placeholder="5:30">
+        <p class="err" id="pace-err" role="alert"></p>
+
+        <div class="field" id="pace2-wrap" hidden>
+          <label class="lbl" for="pace2">Slow pace (min:sec per <span class="unit-lbl"></span>)</label>
+          <input id="pace2" class="big" type="text" inputmode="numeric" autocomplete="off" placeholder="6:00">
+          <p class="err" id="pace2-err" role="alert"></p>
+        </div>
+
+        <button class="btn" id="range-toggle" type="button">Add a slower pace</button>
+        <p class="hint" id="range-hint">Compare a fast and a slow estimate side by side.</p>
+      </div>
+
+      <div class="field">
+        <label class="lbl" for="start">Start time</label>
+        <input id="start" type="time" value="09:00">
+      </div>
+
+      <div class="field">
+        <label class="lbl" for="interval">Checkpoints</label>
+        <div class="row-inline">
+          <span class="u">Every</span>
+          <div class="with-unit">
+            <input id="interval" type="text" inputmode="decimal" autocomplete="off">
+            <span class="u unit-lbl"></span>
+          </div>
+          <button class="btn" id="rebuild" type="button">Rebuild list</button>
+        </div>
+        <p class="hint">Rebuilding replaces the checkpoint list. You can then rename, move or remove each one in the sheet.</p>
+        <p class="err" id="int-err" role="alert"></p>
+      </div>
+    </section>
+
+    <section class="results" id="results" aria-label="Expected times">
+      <div class="hero" id="hero">
+        <div class="hb" id="hb1">
+          <div class="hero-main">
+            <span class="lbl" id="h-race">Expected finish</span>
+            <div class="hero-time" id="h-time" aria-live="polite">0:00:00</div>
+          </div>
+          <div class="stats">
+            <div class="stat"><span class="lbl">Finish at</span><b id="h-clock">—</b></div>
+            <div class="stat"><span class="lbl">Pace</span><b id="h-pace">—</b></div>
+            <div class="stat"><span class="lbl">Speed</span><b id="h-speed">—</b></div>
+          </div>
+        </div>
+        <div class="hb slow" id="hb2" hidden>
+          <div class="hero-main">
+            <span class="lbl" id="h2-race">Slow</span>
+            <div class="hero-time" id="h2-time" aria-live="polite">0:00:00</div>
+          </div>
+          <div class="stats">
+            <div class="stat"><span class="lbl">Finish at</span><b id="h2-clock">—</b></div>
+            <div class="stat"><span class="lbl">Pace</span><b id="h2-pace">—</b></div>
+            <div class="stat"><span class="lbl">Speed</span><b id="h2-speed">—</b></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="strip-card" aria-hidden="true"><div class="strip" id="strip"></div></div>
+
+      <div class="sheet" id="sheet" role="group" aria-label="Checkpoint schedule">
+        <div id="head"></div>
+        <div id="rows"></div>
+      </div>
+
+      <div class="actions">
+        <button class="btn primary" id="add" type="button">Add checkpoint</button>
+        <button class="btn" id="share" type="button">Copy share link</button>
+        <button class="btn" id="copy" type="button">Copy as text</button>
+      </div>
+      <textarea id="fallback" readonly hidden aria-label="Text to copy"></textarea>
+      <p class="note">The share link carries the paces, start time, distance and every checkpoint. Times assume an even pace from the gun. Real races rarely run that way, so treat them as targets. Start time is gun time; a chip-timed start may be a few seconds later.</p>
+    </section>
+  </div>
+</main>
+</body>
+</html>
