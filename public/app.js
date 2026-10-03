@@ -1,4 +1,4 @@
-/* Pace Sheet
+/* PaceBand
    All state lives in the URL query string, so a link carries the whole sheet.
    Internally everything is stored in kilometres and seconds per kilometre; the chosen
    unit only changes what is displayed and typed. */
@@ -8,12 +8,17 @@
   const KM_PER_MI = 1.609344;
   const DASH = '—';
   const MAX_CHECKPOINTS = 300;
-  const PRESETS = [
-    { label: '5K', km: 5 },
-    { label: '10K', km: 10 },
-    { label: 'Half marathon', km: 21.0975 },
-    { label: 'Marathon', km: 42.195 }
-  ];
+  const HALF = { label: 'Half marathon', km: 21.0975 };
+  const FULL = { label: 'Marathon', km: 42.195 };
+  const PRESETS_KM = [{ label: '5K', km: 5 }, { label: '10K', km: 10 }, HALF, FULL];
+  const PRESETS_MI = [{ label: '5 mi', km: 5 * KM_PER_MI }, { label: '10 mi', km: 10 * KM_PER_MI }, HALF, FULL];
+  // Round numbers for each unit: switching units from the defaults lands on these.
+  const DEFAULTS = {
+    km: { paceSec: 330, intervalKm: 5 },
+    mi: { paceSec: 540 / KM_PER_MI, intervalKm: KM_PER_MI }
+  };
+  const presets = () => (S.unit === 'mi' ? PRESETS_MI : PRESETS_KM);
+  const near = (a, b) => Math.abs(a - b) < 1e-6;
 
   let uid = 1;
   let interacted = false; // the address bar stays clean until the first change
@@ -54,9 +59,12 @@
   }
   function parsePace(s) {
     s = String(s == null ? '' : s).trim();
-    const m = /^(\d{1,2}):([0-5]?\d)$/.exec(s);
-    if (m) return (+m[1]) * 60 + (+m[2]);
+    const m = /^(\d{1,2}):([0-5]?\d)?$/.exec(s); // "5:" is 5:00 while typing
+    if (m) return (+m[1]) * 60 + (+(m[2] || 0));
     if (/^\d{1,2}$/.test(s)) return (+s) * 60;
+    // Phone number pads have no colon: "530" means 5:30.
+    const d = /^(\d{1,2})([0-5]\d)$/.exec(s);
+    if (d) return (+d[1]) * 60 + (+d[2]);
     return NaN;
   }
   function startSec() {
@@ -138,7 +146,8 @@
   /* ---------- Inputs ---------- */
 
   function raceName() {
-    for (let i = 0; i < PRESETS.length; i++) if (Math.abs(PRESETS[i].km - S.totalKm) < 1e-6) return PRESETS[i].label;
+    const all = PRESETS_KM.concat(PRESETS_MI);
+    for (let i = 0; i < all.length; i++) if (near(all[i].km, S.totalKm)) return all[i].label;
     return fmtNum(S.totalKm / f(), 2) + ' ' + U();
   }
 
@@ -146,7 +155,7 @@
     const el = $('pace2-err');
     if (!S.range) { S.paceOk2 = false; el.textContent = ''; $('pace2').classList.remove('bad'); return; }
     let msg = '';
-    if (!S.slowFmtOk) msg = 'Use minutes and seconds, for example 7:30.';
+    if (!S.slowFmtOk) msg = 'Use minutes and seconds, for example 7:30 or 730.';
     else if (!(S.paceSec2 > S.paceSec)) msg = 'The slow pace must be slower than the fast pace.';
     S.paceOk2 = !msg;
     el.textContent = msg;
@@ -154,9 +163,7 @@
   }
 
   function syncPresets() {
-    document.querySelectorAll('#presets button').forEach((b) => {
-      b.setAttribute('aria-pressed', String(Math.abs(PRESETS[+b.dataset.i].km - S.totalKm) < 1e-6));
-    });
+    $('presets').innerHTML = presets().map((p, i) => '<button class="chip" type="button" data-i="' + i + '" aria-pressed="' + near(p.km, S.totalKm) + '">' + p.label + '</button>').join('');
   }
 
   function syncInputs() {
@@ -190,35 +197,33 @@
   const TIMES =
     '<div class="times">' +
     '<div class="t p-split" data-l="Split" data-lr="Split"></div>' +
-    '<div class="t p-race" data-l="Race time" data-lr="Fast · race time"></div>' +
-    '<div class="t p-clock" data-l="Time of day" data-lr="Fast · time of day"></div>' +
-    '<div class="t p-race2" data-l="Slow · race time" data-lr="Slow · race time"></div>' +
-    '<div class="t p-clock2" data-l="Slow · time of day" data-lr="Slow · time of day"></div>' +
+    '<div class="t p-race" data-l="Race time" data-lr="Fast"></div>' +
+    '<div class="t p-clock" data-l="Time of day" data-lr=""></div>' +
+    '<div class="t p-race2" data-l="Slow · race time" data-lr="Slow"></div>' +
+    '<div class="t p-clock2" data-l="Slow · time of day" data-lr=""></div>' +
     '</div>';
 
   function rowStart() {
-    return '<div class="row fixed" data-id="start"><div class="c-name static p-name">Start</div><div class="c-dist static-d p-dist">0 ' + U() + '</div><span class="p-rm"></span>' + TIMES + '</div>';
+    return '<div class="row fixed" data-id="start"><div class="static p-dist">Start</div><span class="p-rm"></span>' + TIMES + '</div>';
   }
   function rowFinish() {
-    return '<div class="row fixed" data-id="fin"><div class="c-name static p-name">Finish</div><div class="c-dist static-d p-dist">' + fmtNum(S.totalKm / f(), 2) + ' ' + U() + '</div><span class="p-rm"></span>' + TIMES + '</div>';
+    return '<div class="row fixed" data-id="fin"><div class="static p-dist">Finish <span class="u">' + fmtNum(S.totalKm / f(), 2) + ' ' + U() + '</span></div><span class="p-rm"></span>' + TIMES + '</div>';
   }
   function rowCp(c, over) {
     return '<div class="row' + (over ? ' over' : '') + '" data-id="' + c.id + '">' +
-      '<div class="c-name p-name"><label class="sr" for="n' + c.id + '">Checkpoint name</label>' +
-      '<input id="n' + c.id + '" class="nm" type="text" maxlength="40" autocomplete="off" value="' + esc(c.name || '') + '" placeholder="' + esc(autoLabel(c.km)) + '"></div>' +
-      '<div class="c-dist p-dist"><label class="sr" for="d' + c.id + '">Distance in ' + U() + '</label>' +
-      '<input id="d' + c.id + '" class="ds" type="text" inputmode="decimal" autocomplete="off" value="' + fmtNum(c.km / f(), 3) + '"><span class="u">' + U() + '</span></div>' +
+      '<div class="c-dist p-dist"><label class="sr" for="d' + c.id + '">Checkpoint distance in ' + U() + '</label>' +
+      '<input id="d' + c.id + '" class="ds" type="text" inputmode="decimal" enterkeyhint="done" autocomplete="off" value="' + fmtNum(c.km / f(), 3) + '"><span class="u">' + U() + '</span></div>' +
       '<button class="rm p-rm" type="button" aria-label="Remove checkpoint" title="Remove">&times;</button>' +
       TIMES + '</div>';
   }
   function headHtml() {
     if (S.range) {
       return '<div class="ghead"><span class="g g1" id="g1">Fast</span><span class="g g2" id="g2">Slow</span></div>' +
-        '<div class="head"><span class="p-name">Checkpoint</span><span class="p-dist">Distance</span>' +
+        '<div class="head"><span class="p-dist">Checkpoint</span>' +
         '<span class="num p-race">Race time</span><span class="num p-clock">Time of day</span>' +
         '<span class="num p-race2">Race time</span><span class="num p-clock2">Time of day</span><span class="p-rm"></span></div>';
     }
-    return '<div class="head"><span class="p-name">Checkpoint</span><span class="p-dist">Distance</span>' +
+    return '<div class="head"><span class="p-dist">Checkpoint</span>' +
       '<span class="num p-split">Split</span><span class="num p-race">Race time</span><span class="num p-clock">Time of day</span><span class="p-rm"></span></div>';
   }
 
@@ -261,7 +266,6 @@
       } else {
         const c = S.cps.find((x) => String(x.id) === id);
         if (!c) continue;
-        r.querySelector('.nm').placeholder = autoLabel(c.km);
         if (prev.has(c.id)) {
           fill(r, S.paceOk ? T(c.km) - T(prev.get(c.id)) : null, T(c.km), T2(c.km));
         } else {
@@ -337,17 +341,26 @@
 
   ['input', 'change', 'click'].forEach((ev) => document.addEventListener(ev, () => { interacted = true; }, true));
 
-  $('presets').innerHTML = PRESETS.map((p, i) => '<button class="chip" type="button" data-i="' + i + '" aria-pressed="false">' + p.label + '</button>').join('');
   $('presets').addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (!b) return;
-    S.totalKm = PRESETS[+b.dataset.i].km;
+    S.totalKm = presets()[+b.dataset.i].km;
     syncInputs(); build(); render();
   });
   $('units').addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (!b || b.dataset.unit === S.unit) return;
-    S.unit = b.dataset.unit;
+    const from = S.unit, to = b.dataset.unit;
+    // Still on the old unit's defaults? Move to the new unit's round numbers.
+    const snap = (list, other) => { const i = list.findIndex((p) => near(p.km, S.totalKm)); if (i >= 0) S.totalKm = other[i].km; };
+    snap(from === 'mi' ? PRESETS_MI : PRESETS_KM, to === 'mi' ? PRESETS_MI : PRESETS_KM);
+    if (near(S.paceSec, DEFAULTS[from].paceSec)) S.paceSec = DEFAULTS[to].paceSec;
+    if (S.paceSec2 != null && near(S.paceSec2, DEFAULTS[from].paceSec + 30 / (from === 'mi' ? KM_PER_MI : 1))) S.paceSec2 = DEFAULTS[to].paceSec + 30 / (to === 'mi' ? KM_PER_MI : 1);
+    if (near(S.intervalKm, DEFAULTS[from].intervalKm)) {
+      S.intervalKm = DEFAULTS[to].intervalKm;
+      build();
+    }
+    S.unit = to;
     syncInputs(); render();
   });
   $('dist').addEventListener('input', (e) => {
@@ -360,15 +373,36 @@
     syncPresets();
     render();
   });
+  // Bank-card style mask: digits in, "m:ss" out, with the colon added as you type.
+  // A leading 1 means two-digit minutes (10:00 and up); any other digit is a single minute digit.
+  function maskPace(raw, deleting) {
+    const d = raw.replace(/\D/g, '').replace(/^0+/, '').slice(0, 4);
+    const m = d[0] === '1' ? 2 : 1;
+    if (d.length < m) return d;
+    if (d.length === m) return deleting ? d : d + ':';
+    let sec = d.slice(m);
+    if (sec.length === 1 && sec > '5') sec = '0' + sec; // 5:7 can only mean 5:07
+    return d.slice(0, m) + ':' + sec;
+  }
+  ['pace', 'pace2'].forEach((id) => $(id).addEventListener('input', (e) => {
+    const el = e.target, v = maskPace(el.value, /^delete/.test(e.inputType || ''));
+    if (v !== el.value) el.value = v;
+  }));
+
   $('pace').addEventListener('input', (e) => {
     const sec = parsePace(e.target.value);
     S.paceOk = validPace(sec);
     if (S.paceOk) S.paceSec = sec / f();
     e.target.classList.toggle('bad', !S.paceOk);
-    $('pace-err').textContent = S.paceOk ? '' : 'Use minutes and seconds, for example 5:30.';
+    $('pace-err').textContent = S.paceOk ? '' : 'Use minutes and seconds, for example 5:30 or 530.';
     validate();
     update();
   });
+  // Tidy "530" into "5:30" once the user leaves the field.
+  ['pace', 'pace2'].forEach((id) => $(id).addEventListener('change', (e) => {
+    const sec = parsePace(e.target.value);
+    if (validPace(sec)) e.target.value = fmtPace(sec);
+  }));
   $('pace2').addEventListener('input', (e) => {
     const sec = parsePace(e.target.value);
     S.slowFmtOk = validPace(sec);
@@ -413,10 +447,7 @@
   rowsEl.addEventListener('input', (e) => {
     const c = findCp(e.target);
     if (!c) return;
-    if (e.target.classList.contains('nm')) {
-      c.name = e.target.value.trim() ? e.target.value : null;
-      syncUrl();
-    } else if (e.target.classList.contains('ds')) {
+    if (e.target.classList.contains('ds')) {
       const v = parseNum(e.target.value) * f();
       if (v > 0 && v <= 1000) { e.target.classList.remove('bad'); c.km = v; update(); }
       else e.target.classList.add('bad');

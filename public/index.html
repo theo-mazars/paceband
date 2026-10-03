@@ -4,6 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#e9edf0" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0b1318" media="(prefers-color-scheme: dark)">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="PaceBand">
   <meta name="description" content="Expected passage times at every checkpoint of a race, from a steady pace or a fast and slow pace side by side.">
   <title>PaceBand</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
@@ -24,30 +28,28 @@
       <div class="field">
         <span class="lbl">Race</span>
         <div class="chips" id="presets"></div>
-        <div class="with-unit">
-          <label class="sr" for="dist">Total distance</label>
-          <input id="dist" type="text" inputmode="decimal" autocomplete="off">
-          <span class="u unit-lbl"></span>
+        <div class="dist-row">
+          <div class="with-unit">
+            <label class="sr" for="dist">Total distance</label>
+            <input id="dist" type="text" inputmode="decimal" enterkeyhint="done" autocomplete="off">
+            <span class="u unit-lbl"></span>
+          </div>
+          <div class="seg" id="units" role="group" aria-label="Units">
+            <button type="button" data-unit="km" aria-pressed="true">km</button>
+            <button type="button" data-unit="mi" aria-pressed="false">mi</button>
+          </div>
         </div>
         <p class="err" id="dist-err" role="alert"></p>
       </div>
 
       <div class="field">
-        <span class="lbl">Units</span>
-        <div class="seg" id="units">
-          <button type="button" data-unit="km" aria-pressed="true">Kilometres</button>
-          <button type="button" data-unit="mi" aria-pressed="false">Miles</button>
-        </div>
-      </div>
-
-      <div class="field">
         <label class="lbl" for="pace"><span id="pace-lbl">Pace</span> (min:sec per <span class="unit-lbl"></span>)</label>
-        <input id="pace" class="big" type="text" inputmode="numeric" autocomplete="off" placeholder="5:30">
+        <input id="pace" class="big" type="text" maxlength="5" inputmode="numeric" enterkeyhint="next" autocomplete="off" placeholder="5:30">
         <p class="err" id="pace-err" role="alert"></p>
 
         <div class="field" id="pace2-wrap" hidden>
           <label class="lbl" for="pace2">Slow pace (min:sec per <span class="unit-lbl"></span>)</label>
-          <input id="pace2" class="big" type="text" inputmode="numeric" autocomplete="off" placeholder="6:00">
+          <input id="pace2" class="big" type="text" maxlength="5" inputmode="numeric" enterkeyhint="done" autocomplete="off" placeholder="6:00">
           <p class="err" id="pace2-err" role="alert"></p>
         </div>
 
@@ -60,19 +62,20 @@
         <input id="start" type="time" value="09:00">
       </div>
 
-      <div class="field">
-        <label class="lbl" for="interval">Checkpoints</label>
+      <details class="field adv" id="cp-settings">
+        <summary class="lbl">Checkpoint spacing</summary>
         <div class="row-inline">
           <span class="u">Every</span>
           <div class="with-unit">
-            <input id="interval" type="text" inputmode="decimal" autocomplete="off">
+            <label class="sr" for="interval">Checkpoint spacing</label>
+            <input id="interval" type="text" inputmode="decimal" enterkeyhint="done" autocomplete="off">
             <span class="u unit-lbl"></span>
           </div>
           <button class="btn" id="rebuild" type="button">Rebuild list</button>
         </div>
-        <p class="hint">Rebuilding replaces the checkpoint list. You can then rename, move or remove each one in the sheet.</p>
+        <p class="hint">Rebuilding replaces the checkpoint list. You can then rename, move or remove each one below.</p>
         <p class="err" id="int-err" role="alert"></p>
-      </div>
+      </details>
     </section>
 
     <section class="results" id="results" aria-label="Expected times">

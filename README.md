@@ -1,4 +1,4 @@
-# Pace Sheet
+# PaceBand
 
 Enter a pace, a start time and a distance, and get the expected passage time at every
 checkpoint. Optionally enter a second, slower pace to see a fast and a slow estimate side by side.
@@ -8,10 +8,11 @@ Fonts are self-hosted, so the page makes no third-party requests.
 
 ## What it does
 
-- Distance presets (5K, 10K, half marathon, marathon) or any custom distance, in kilometres or miles.
-- Pace as `min:sec` per kilometre or per mile. Defaults: half marathon, 5:30 /km, 09:00 start,
+- Distance presets (5K, 10K, half marathon, marathon; in miles mode 5 mi, 10 mi, half, marathon) or any custom distance. Switching units from the defaults lands on round numbers: 5:30 /km becomes 9:00 /mi, and a checkpoint every 5 km becomes every mile.
+- Pace as `min:sec` per kilometre or per mile; on a phone keypad, `530` is read as `5:30`. Defaults: half marathon, 5:30 /km, 09:00 start,
   a checkpoint every 5 km.
 - "Add a slower pace" shows two columns of race time and time of day, one per pace.
+- Mobile first: one column on phones, large touch targets, and the share and copy buttons pinned to the bottom of the screen. Two columns from 54rem up.
 - Checkpoints can be rebuilt from a spacing, then renamed, moved, removed or added one by one.
 - "Copy share link" copies a URL that restores the whole sheet. "Copy as text" copies a plain-text table.
 
@@ -47,8 +48,8 @@ python3 -m http.server -d public 8080
 Or with Docker:
 
 ```sh
-docker build -t pace-sheet .
-docker run --rm -p 8080:80 pace-sheet
+docker build -t paceband .
+docker run --rm -p 8080:80 paceband
 ```
 
 ## Deploy with Dokploy
