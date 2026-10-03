@@ -233,6 +233,12 @@ small { font-size: 0.65em; font-weight: 600; color: var(--muted); }
 .lv-col.slow { border-left-color: var(--ink); }
 .lv-pos { font-family: var(--font-display); font-weight: 600; font-size: 1.75rem; line-height: 1.1; }
 .lv-next { font-size: 0.875rem; color: var(--muted); }
+.lv-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.lv-actions .btn { align-self: auto; flex: 1 1 6rem; }
+.lv-actions .primary { flex: 2 1 12rem; }
+.c-dist { flex-wrap: wrap; }
+.drift { display: block; flex-basis: 100%; font: 500 0.8125rem var(--font-body); color: var(--muted); }
+.drift:empty { display: none; }
 .lv-next b { color: var(--ink); font-weight: 600; }
 .strip-card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 0.75rem 1.5rem 0.25rem; }
 .strip { position: relative; height: 2.75rem; }

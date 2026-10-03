@@ -37,6 +37,7 @@
     totalKm: 21.0975,
     intervalKm: 5,
     cps: null,
+    logs: {}, // logged passages: km -> seconds since the gun, or null when skipped
     live: false // follow the clock of the day; never stored in the URL
   };
 
@@ -205,15 +206,15 @@
     '</div>';
 
   function rowStart() {
-    return '<div class="row fixed" data-id="start"><div class="static p-dist">Start</div><span class="p-rm"></span>' + TIMES + '</div>';
+    return '<div class="row fixed" data-id="start"><div class="static p-dist">Start<span class="drift"></span></div><span class="p-rm"></span>' + TIMES + '</div>';
   }
   function rowFinish() {
-    return '<div class="row fixed" data-id="fin"><div class="static p-dist">Finish <span class="u">' + fmtNum(S.totalKm / f(), 2) + ' ' + U() + '</span></div><span class="p-rm"></span>' + TIMES + '</div>';
+    return '<div class="row fixed" data-id="fin"><div class="static p-dist">Finish <span class="u">' + fmtNum(S.totalKm / f(), 2) + ' ' + U() + '</span><span class="drift"></span></div><span class="p-rm"></span>' + TIMES + '</div>';
   }
   function rowCp(c, over) {
     return '<div class="row' + (over ? ' over' : '') + '" data-id="' + c.id + '">' +
       '<div class="c-dist p-dist"><label class="sr" for="d' + c.id + '">Checkpoint distance in ' + U() + '</label>' +
-      '<input id="d' + c.id + '" class="ds" type="text" inputmode="decimal" enterkeyhint="done" autocomplete="off" value="' + fmtNum(c.km / f(), 3) + '"><span class="u">' + U() + '</span></div>' +
+      '<input id="d' + c.id + '" class="ds" type="text" inputmode="decimal" enterkeyhint="done" autocomplete="off" value="' + fmtNum(c.km / f(), 3) + '"><span class="u">' + U() + '</span><span class="drift"></span></div>' +
       '<button class="rm p-rm" type="button" aria-label="Remove checkpoint" title="Remove">&times;</button>' +
       TIMES + '</div>';
   }
@@ -339,8 +340,66 @@
     return e;
   }
 
+  /* Logged passages. A spectator taps when the runner passes a checkpoint; the next
+     projections restart from that real time instead of the plan, which stops drift
+     from building up. Keyed by distance, kept on this device only (never in share links). */
+  const logKey = (km) => String(round5(km));
+  const hasLog = (km) => logKey(km) in S.logs;
+  const raceKey = () => new Date().toDateString() + '|' + S.start + '|' + round5(S.totalKm);
+  function loadLogs() {
+    try {
+      const o = JSON.parse(localStorage.getItem('paceband-log') || 'null');
+      if (o && o.k === raceKey() && o.logs && typeof o.logs === 'object') {
+        Object.keys(o.logs).forEach((k) => {
+          const v = o.logs[k];
+          if (v === null || (typeof v === 'number' && isFinite(v))) S.logs[k] = v;
+        });
+      }
+    } catch (e) { /* storage unavailable: logs last for this visit only */ }
+  }
+  function saveLogs() {
+    try { localStorage.setItem('paceband-log', JSON.stringify({ k: raceKey(), logs: S.logs })); } catch (e) { /* ignore */ }
+  }
+  const stopKms = () => domOrder().ord.map((c) => c.km).concat([S.totalKm]);
+  // Unlogged checkpoints at or before the last logged one count as skipped: the runner is already past them.
+  const nextToLog = () => {
+    const a = anchor();
+    return stopKms().find((km) => !hasLog(km) && (!a || km > a.km + 1e-9));
+  };
+  function anchor() {
+    const done = stopKms().filter((km) => typeof S.logs[logKey(km)] === 'number');
+    if (!done.length) return null;
+    const km = done[done.length - 1];
+    return { km, t: S.logs[logKey(km)] };
+  }
+  const mmss = (s) => fmtPace(Math.abs(s));
+  function driftText(km, t) {
+    const lead = Math.round(km * S.paceSec);
+    if (S.range && S.paceOk2) {
+      const slow = Math.round(km * S.paceSec2);
+      if (t < lead) return mmss(lead - t) + ' ahead of fast';
+      if (t > slow) return mmss(t - slow) + ' behind slow';
+      return 'within range';
+    }
+    if (t === lead) return 'on pace';
+    return mmss(t - lead) + (t > lead ? ' behind' : ' ahead');
+  }
+  function drifts() {
+    const rows = $('rows').children;
+    for (let i = 0; i < rows.length; i++) {
+      const id = rows[i].dataset.id, d = rows[i].querySelector('.drift');
+      if (!d) continue;
+      let km = null;
+      if (id === 'fin') km = S.totalKm;
+      else if (id !== 'start') { const c = S.cps.find((x) => String(x.id) === id); if (c && c.km < S.totalKm - 1e-9) km = c.km; }
+      const v = km == null || !hasLog(km) ? undefined : S.logs[logKey(km)];
+      d.textContent = v === undefined ? '' : v === null ? 'skipped' : 'Passed ' + hms(v) + ' · ' + (S.paceOk ? driftText(km, v) : '');
+    }
+  }
+
   function live() {
     const rows = $('rows').children, el = $('strip'), card = $('live-card');
+    drifts();
     for (let i = 0; i < rows.length; i++) rows[i].classList.remove('passed', 'passed-fast');
     el.querySelectorAll('.cursor').forEach((n) => n.remove());
     el.querySelectorAll('.tick.done').forEach((n) => n.classList.remove('done'));
@@ -352,16 +411,20 @@
     const ready = paces.filter((p) => p.ok);
     if (!ready.length) return;
 
+    // Projection from the last logged passage, or from the plan when nothing is logged yet.
+    const anc = anchor();
+    const projT = (km, p) => (anc && km >= anc.km ? anc.t + (km - anc.km) * p.sec : km * p.sec);
+    const posKm = (p) => Math.min(S.totalKm, Math.max(anc ? anc.km : 0, anc ? anc.km + Math.max(0, e - anc.t) / p.sec : e / p.sec));
+    const passedAt = (km, p) => hasLog(km) || (anc && km <= anc.km + 1e-9) || (e >= 0 && e >= Math.round(projT(km, p)));
+
     paces.forEach((p) => {
       if (!p.ok) return;
-      const x = Math.min(1, Math.max(0, e / (S.totalKm * p.sec))) * 100;
       const c = document.createElement('span');
       c.className = p.cls;
-      c.style.left = x + '%';
+      c.style.left = (posKm(p) / S.totalKm) * 100 + '%';
       el.appendChild(c);
     });
     const slowest = ready[ready.length - 1];
-    const passedAt = (km, p) => e >= 0 && e >= Math.round(km * p.sec);
     const mark = (row, km) => {
       const n = ready.filter((p) => passedAt(km, p)).length;
       if (n === ready.length) row.classList.add('passed');
@@ -376,31 +439,74 @@
         if (c && c.km < S.totalKm - 1e-9) mark(rows[i], c.km);
       }
     }
-    el.querySelectorAll('.tick').forEach((t) => { if (e >= 0 && e >= Math.round(S.totalKm * (+t.dataset.x / 100) * slowest.sec)) t.classList.add('done'); });
+    el.querySelectorAll('.tick').forEach((t) => { if (passedAt(S.totalKm * (+t.dataset.x / 100), slowest)) t.classList.add('done'); });
 
-    // Card: elapsed clock on top, then one column per pace with its position and next checkpoint.
-    const finishSec = Math.round(S.totalKm * slowest.sec);
-    $('lv-el-l').textContent = e < 0 ? 'Starts in' : e >= finishSec ? 'Finished' : 'Elapsed';
+    // Card: elapsed clock, one column per pace, then the logging controls.
+    const finished = hasLog(S.totalKm) || e >= Math.round(projT(S.totalKm, slowest));
+    $('lv-el-l').textContent = e < 0 ? 'Starts in' : finished ? 'Finished' : 'Elapsed';
     $('lv-el').textContent = hms(Math.abs(e));
-    const stops = domOrder().ord.map((c) => c.km).concat([S.totalKm]);
+    const stops = stopKms();
     const col = (id, name, p) => {
       const root = $(id);
       root.hidden = !p || !p.ok;
       if (root.hidden) return;
-      const km = Math.min(S.totalKm, Math.max(0, e / p.sec));
+      const km = posKm(p);
       const nx = stops.find((s) => s > km + 1e-9);
       $(id + '-l').textContent = name + ' · ' + fmtPace(p.sec * f()) + ' /' + U();
       $(id + '-pos').textContent = fmtNum(km / f(), 2) + ' ' + U();
-      $(id + '-next').innerHTML = nx == null ? 'Finished' :
-        'Next <b>' + (nx === S.totalKm ? 'finish ' : '') + fmtNum(nx / f(), 2) + ' ' + U() + '</b> in <b>' + hms(Math.max(0, Math.round(nx * p.sec) - Math.max(0, e))) + '</b>';
+      const fin = Math.round(projT(S.totalKm, p));
+      $(id + '-next').innerHTML = (nx == null ? 'Finished' :
+        'Next <b>' + (nx === S.totalKm ? 'finish ' : '') + fmtNum(nx / f(), 2) + ' ' + U() + '</b> in <b>' + hms(Math.max(0, Math.round(projT(nx, p)) - Math.max(0, e))) + '</b>') +
+        '<br>Finish <b>' + hms(fin) + '</b> · ' + clockHtml(fin);
     };
     col('lv1', S.range ? 'Fast' : 'Pace', paces[0]);
     col('lv2', 'Slow', S.range ? paces[1] : null);
+
+    const last = $('lv-last');
+    last.hidden = !anc;
+    if (anc) last.textContent = 'Last logged ' + fmtNum(anc.km / f(), 2) + ' ' + U() + ' at ' + hms(anc.t) + ' · ' + driftText(anc.km, anc.t) + '. Projections restart from there.';
+    const nl = nextToLog();
+    $('lv-pass').hidden = $('lv-skip').hidden = nl == null;
+    $('lv-pass').disabled = e < 0;
+    if (nl != null) $('lv-pass').textContent = 'Passed ' + (nl === S.totalKm ? 'finish ' : '') + fmtNum(nl / f(), 2) + ' ' + U();
+    $('lv-undo').hidden = !Object.keys(S.logs).length;
+  }
+  $('lv-pass').addEventListener('click', () => {
+    const e = elapsedNow(), nl = nextToLog();
+    if (e == null || e < 0 || nl == null) return;
+    S.logs[logKey(nl)] = e;
+    saveLogs(); live();
+  });
+  $('lv-skip').addEventListener('click', () => {
+    const nl = nextToLog();
+    if (nl == null) return;
+    S.logs[logKey(nl)] = null;
+    saveLogs(); live();
+  });
+  $('lv-undo').addEventListener('click', () => {
+    const done = stopKms().filter(hasLog);
+    if (!done.length) return;
+    delete S.logs[logKey(done[done.length - 1])];
+    saveLogs(); live();
+  });
+  // Joining a race already under way: checkpoints every pace has passed by now are skipped,
+  // so "Passed" offers the one the runner is heading for. The finish is never skipped.
+  function skipPassed() {
+    const e = elapsedNow();
+    const secs = [S.paceOk && S.paceSec, S.range && S.paceOk2 && S.paceSec2].filter(Boolean);
+    if (e == null || e < 0 || !secs.length) return;
+    const slowest = Math.max.apply(null, secs);
+    let changed = false;
+    stopKms().slice(0, -1).forEach((km) => {
+      if (!hasLog(km) && e >= Math.round(km * slowest)) { S.logs[logKey(km)] = null; changed = true; }
+    });
+    if (changed) saveLogs();
   }
   let liveTimer = 0;
   $('live').addEventListener('click', function () {
     S.live = !S.live;
     this.setAttribute('aria-pressed', String(S.live));
+    if (S.live) skipPassed();
     clearInterval(liveTimer);
     if (S.live) liveTimer = setInterval(live, 1000);
     live();
@@ -608,6 +714,7 @@
   /* ---------- Start ---------- */
 
   loadFromUrl();
+  loadLogs();
   if (!S.cps) build();
   syncInputs();
   render();
